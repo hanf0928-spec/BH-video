@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title data-i18n-title="site.title.home">BH Video — Tonton di Mana Saja</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="i18n.js"></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container header-inner">
+      <a href="index.html" class="logo">
+        <span class="logo-mark">▶</span>
+        <span class="logo-text">BH<span class="accent">Video</span></span>
+      </a>
+
+      <div class="search-bar">
+        <input id="searchInput" type="text"
+               data-i18n-attr="placeholder:header.search.placeholder" />
+        <button id="searchBtn"
+                data-i18n-attr="aria-label:header.search.aria">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="7"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+        </button>
+      </div>
+
+      <nav class="top-nav">
+        <a href="#" class="active" data-i18n="nav.home">Beranda</a>
+        <a href="#" data-i18n="nav.trending">Trending</a>
+        <a href="#" data-i18n="nav.library">Pustaka</a>
+      </nav>
+
+      <div class="lang-switcher-host" data-lang-switcher></div>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- Hero / Featured -->
+    <section id="hero" class="hero">
+      <!-- Filled by app.js -->
+    </section>
+
+    <!-- Category filters -->
+    <section class="filters">
+      <h2 class="section-title" data-i18n="home.browse">Jelajahi</h2>
+      <div id="categoryBar" class="category-bar">
+        <!-- Filled by app.js -->
+      </div>
+    </section>
+
+    <!-- Video grid -->
+    <section class="grid-section">
+      <h2 class="section-title" id="gridTitle" data-i18n="home.allVideos">Semua Video</h2>
+      <div id="videoGrid" class="video-grid">
+        <!-- Filled by app.js -->
+      </div>
+      <p id="emptyState" class="empty-state" data-i18n="home.empty" hidden>
+        Tidak ada video yang cocok dengan pencarian Anda. Coba kata kunci lain.
+      </p>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p data-i18n="footer.home">© 2025 BH Video — Platform demo video sesuai permintaan. Semua video sampel milik pemiliknya masing-masing.</p>
+    </div>
+  </footer>
+
+  <script src="videos.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
