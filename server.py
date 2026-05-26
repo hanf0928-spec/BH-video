@@ -162,7 +162,7 @@ def main():
             print("Invalid port:", sys.argv[1], file=sys.stderr)
             sys.exit(2)
 
-    bind = "127.0.0.1"
+    bind = "0.0.0.0"
     server = ThreadingHTTPServer((bind, port), BHVideoHandler)
     print("BH-video server running at http://%s:%d/" % (bind, port))
     print("Stats file: %s" % DATA_FILE)
