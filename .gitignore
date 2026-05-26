@@ -46,3 +46,7 @@ coverage/
 *.pid
 *.seed
 *.pid.lock
+
+# Runtime data
+views.json
+views.json.tmp

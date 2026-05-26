@@ -51,11 +51,20 @@ $ver = & $python3Exe --version 2>&1
 Write-Host ("                   Version: {0}" -f $ver)
 
 # Step 3: start the static file server in the background.
+# We use the bundled server.py instead of `python -m http.server` so that
+# the /api/stats endpoints (open / play / ended counts) are available and
+# get persisted to views.json inside the project folder.
 $logOut = Join-Path $root ".server.log"
 $logErr = Join-Path $root ".server.err.log"
+$serverScript = Join-Path $root "server.py"
+
+if (-not (Test-Path $serverScript)) {
+    Write-Error ("server.py not found at {0}" -f $serverScript)
+    exit 1
+}
 
 $proc = Start-Process -FilePath $python3Exe `
-    -ArgumentList @("-m", "http.server", "$port", "--bind", "127.0.0.1") `
+    -ArgumentList @($serverScript, "$port") `
     -WorkingDirectory $root `
     -WindowStyle Hidden `
     -RedirectStandardOutput $logOut `

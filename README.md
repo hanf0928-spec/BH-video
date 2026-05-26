@@ -24,25 +24,28 @@ BH-video/
 
 ## How to Run
 
-The project is 100% static. You can simply double-click `index.html`, but for the most reliable
-video playback (some browsers block `file://` media), serve it through a local HTTP server:
+The front-end is 100% static, but a tiny Python server (`server.py`) ships with
+the project to provide a play-count API and persist counts to `views.json`
+inside the project folder. Run it like this:
 
 ```bash
-# Option 1: Python 3 (Linux / macOS, or Windows where `python3` is on PATH)
-python3 -m http.server 8765
+# Linux / macOS
+python3 server.py            # binds 127.0.0.1:8765
+python3 server.py 8080       # custom port
 
-# Option 2: Python 3 on Windows (the recommended launcher)
-py -3 -m http.server 8765
-
-# Option 3: Node.js
-npx serve . -p 8765
+# Windows
+py -3 server.py
 ```
 
 Then open http://localhost:8765 in your browser.
 
+> If you skip `server.py` and just open `index.html` directly, the site still
+> works, but play counts will not be recorded.
+
 > **Windows tip:** If `python3 --version` prints nothing, you are hitting the
 > Microsoft Store *App Execution Alias* stub. Use `py -3 ...` instead — or run
-> the bundled helper script which auto-detects the real interpreter:
+> the bundled helper script which auto-detects the real interpreter and starts
+> `server.py` in the background:
 >
 > ```powershell
 > # Start (binds to 127.0.0.1:8765, runs hidden in the background)
@@ -51,6 +54,29 @@ Then open http://localhost:8765 in your browser.
 > # Stop
 > powershell -ExecutionPolicy Bypass -File .\.stopserver.ps1
 > ```
+
+## Play-count tracking
+
+`server.py` exposes a tiny JSON API that records three counters per video:
+
+| Counter   | When it is incremented                                |
+|-----------|-------------------------------------------------------|
+| `opens`   | Every time `player.html` is loaded (or switched to)   |
+| `plays`   | The first time the `<video>` actually starts playing  |
+| `ends`    | Every time playback reaches the end of the video      |
+
+All counters are persisted to `views.json` in the project root. The home page
+shows the real `plays` number on each card; if the API is unreachable (e.g.
+the page was opened via `file://`), the static fallback in `videos.js` is
+used instead.
+
+API quick reference:
+
+```
+GET  /api/stats                          → { "<videoId>": { opens, plays, ends }, ... }
+POST /api/stats   { "id":"<videoId>",
+                    "event":"open"|"play"|"ended" }
+```
 
 ## How It Works
 

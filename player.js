@@ -30,6 +30,31 @@
   };
   const t = (k, p) => i18n.t(k, p);
 
+  /**
+   * Fire-and-forget play-count reporter.
+   * Sends { id, event } to /api/stats on the static server (server.py).
+   * Failures are silenced so a missing backend never breaks playback.
+   */
+  function reportStat(id, event) {
+    if (!id || !event) return;
+    try {
+      fetch("/api/stats", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, event }),
+        keepalive: true,
+      }).catch(() => {
+        /* offline / no backend — ignore */
+      });
+    } catch (_) {
+      /* fetch unavailable — ignore */
+    }
+  }
+
+  // Track which video already reported the 'play' event so we count at most
+  // once per navigation (a single video may pause/resume many times).
+  let playReportedFor = null;
+
   /** Read the requested video id from the URL query string. */
   function getRequestedId() {
     const params = new URLSearchParams(window.location.search);
@@ -67,6 +92,8 @@
       videoEl.src = video.src;
       videoEl.poster = video.thumbnail;
       videoEl.dataset.currentId = video.id;
+      // New video → reset the per-navigation "play already reported" guard.
+      playReportedFor = null;
       videoEl.load();
       const playPromise = videoEl.play();
       if (playPromise && typeof playPromise.catch === "function") {
@@ -140,6 +167,8 @@
     window.history.pushState({ id }, "", newUrl);
     loadVideo(video);
     renderUpNext(id);
+    // Count one "open" per navigation to a different video.
+    reportStat(video.id, "open");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -175,10 +204,23 @@
   function bindAutoPlayNext() {
     videoEl.addEventListener("ended", () => {
       const currentId = getRequestedId();
+      // Count one "completed" view per finish event.
+      reportStat(currentId, "ended");
       const idx = videos.findIndex((v) => v.id === currentId);
       if (idx === -1) return;
       const next = videos[(idx + 1) % videos.length];
       if (next) navigateTo(next.id);
+    });
+  }
+
+  /** Report the first real "play" for whichever video is currently loaded. */
+  function bindFirstPlayReporter() {
+    videoEl.addEventListener("play", () => {
+      const id = videoEl.dataset.currentId || getRequestedId();
+      if (!id) return;
+      if (playReportedFor === id) return; // already counted for this load
+      playReportedFor = id;
+      reportStat(id, "play");
     });
   }
 
@@ -273,7 +315,11 @@
     bindUpNextEvents();
     bindActions();
     bindAutoPlayNext();
+    bindFirstPlayReporter();
     bindHistory();
+
+    // Count one "open" each time the player page is loaded for a video.
+    if (video) reportStat(video.id, "open");
 
     if (window.I18N && typeof window.I18N.onChange === "function") {
       window.I18N.onChange(() => {

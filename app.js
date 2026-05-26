@@ -18,6 +18,12 @@
   const searchInput = document.getElementById("searchInput");
   const searchBtn = document.getElementById("searchBtn");
 
+  // Real play counts fetched from the backend (server.py + views.json).
+  // Shape: { "<videoId>": { opens, plays, ends } }. Empty until /api/stats
+  // resolves — the grid renders immediately with the static fallback in
+  // videos.js and is re-rendered as soon as the real numbers arrive.
+  let playStats = {};
+
   const i18n = window.I18N || {
     t: (k) => k,
     pickLocalized: (v, f) => (v ? v[f] : ""),
@@ -25,6 +31,43 @@
     onChange: () => () => {},
   };
   const t = (k, p) => i18n.t(k, p);
+
+  /**
+   * Fetch real play counts from the backend. Falls back to the static
+   * `views` field embedded in videos.js if the API is unreachable (e.g. the
+   * page is opened directly via file:// without server.py).
+   */
+  function fetchPlayStats() {
+    return fetch("/api/stats", { headers: { Accept: "application/json" } })
+      .then((r) => (r.ok ? r.json() : {}))
+      .then((data) => {
+        playStats = data && typeof data === "object" ? data : {};
+      })
+      .catch(() => {
+        playStats = {};
+      });
+  }
+
+  /** Format a play count for display on a card (e.g. 1.2M, 12.3K, 999). */
+  function formatCount(n) {
+    const num = Number(n) || 0;
+    if (num >= 1_000_000) return (num / 1_000_000).toFixed(1).replace(/\.0$/, "") + "M";
+    if (num >= 1_000) return (num / 1_000).toFixed(1).replace(/\.0$/, "") + "K";
+    return String(num);
+  }
+
+  /**
+   * Returns the string that should appear on a video card next to the views
+   * suffix. If the backend reported a "plays" count for this video we show
+   * that real number; otherwise we keep the static fallback in videos.js.
+   */
+  function viewsLabel(video) {
+    const entry = playStats && playStats[video.id];
+    if (entry && typeof entry.plays === "number" && entry.plays > 0) {
+      return formatCount(entry.plays);
+    }
+    return video.views;
+  }
 
   /** Open the player page in a new tab. */
   function openPlayer(id) {
@@ -101,6 +144,7 @@
       .map((v) => {
         const title = i18n.pickLocalized(v, "title");
         const author = i18n.pickLocalized(v, "author") || v.author;
+        const views = viewsLabel(v);
         return `
         <article class="video-card" data-id="${escapeAttr(v.id)}" tabindex="0" role="button"
                  aria-label="${escapeAttr(t("card.playAria", { title }))}">
@@ -113,7 +157,7 @@
           </div>
           <div class="card-body">
             <h3 class="card-title">${escapeHtml(title)}</h3>
-            <div class="card-meta">${escapeHtml(author)} • ${escapeHtml(v.views)} ${escapeHtml(t("card.viewsSuffix"))}</div>
+            <div class="card-meta">${escapeHtml(author)} • ${escapeHtml(views)} ${escapeHtml(t("card.viewsSuffix"))}</div>
           </div>
         </article>
       `;
@@ -214,6 +258,17 @@
     renderGrid(videos);
     bindGridEvents();
     bindSearch();
+
+    // Pull real play counts from the backend, then re-render the grid so
+    // each card shows its true "plays" number. Re-fetch when the page
+    // becomes visible again so counts stay roughly fresh after the user
+    // came back from a player tab.
+    fetchPlayStats().then(() => applyFilters());
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") {
+        fetchPlayStats().then(() => applyFilters());
+      }
+    });
 
     if (window.I18N && typeof window.I18N.onChange === "function") {
       window.I18N.onChange(refreshAll);
