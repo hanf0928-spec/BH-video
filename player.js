@@ -30,9 +30,55 @@
   };
   const t = (k, p) => i18n.t(k, p);
 
+  // Latest play counts fetched from /api/stats. Shape:
+  //   { "<videoId>": { opens, plays, ends } }
+  // Used to render the real "plays" number on the player page.
+  let playStats = {};
+
+  /** Format a play count (e.g. 1.2M, 12.3K, 999). */
+  function formatCount(n) {
+    const num = Number(n) || 0;
+    if (num >= 1_000_000) return (num / 1_000_000).toFixed(1).replace(/\.0$/, "") + "M";
+    if (num >= 1_000) return (num / 1_000).toFixed(1).replace(/\.0$/, "") + "K";
+    return String(num);
+  }
+
+  /** Pick the label to show next to the views suffix for a given video. */
+  function viewsLabel(video) {
+    if (!video) return "";
+    const entry = playStats && playStats[video.id];
+    if (entry && typeof entry.plays === "number" && entry.plays > 0) {
+      return formatCount(entry.plays);
+    }
+    return video.views;
+  }
+
+  /** Refresh the views line of the currently displayed video. */
+  function refreshViewsLine() {
+    const id = (videoEl && videoEl.dataset.currentId) || getRequestedId();
+    const v = pickVideo(id);
+    if (!v || !viewsEl) return;
+    viewsEl.textContent = `${viewsLabel(v)} ${t("card.viewsSuffix")}`;
+  }
+
+  /** Pull the latest stats from the backend, then update the views line. */
+  function fetchPlayStats() {
+    return fetch("/api/stats", { headers: { Accept: "application/json" } })
+      .then((r) => (r.ok ? r.json() : {}))
+      .then((data) => {
+        playStats = data && typeof data === "object" ? data : {};
+        refreshViewsLine();
+      })
+      .catch(() => {
+        /* offline / no backend — keep static fallback */
+      });
+  }
+
   /**
    * Fire-and-forget play-count reporter.
    * Sends { id, event } to /api/stats on the static server (server.py).
+   * On success, applies the returned counters locally and refreshes the
+   * views line so the page reflects the new value immediately.
    * Failures are silenced so a missing backend never breaks playback.
    */
   function reportStat(id, event) {
@@ -43,9 +89,17 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id, event }),
         keepalive: true,
-      }).catch(() => {
-        /* offline / no backend — ignore */
-      });
+      })
+        .then((r) => (r && r.ok ? r.json() : null))
+        .then((data) => {
+          if (data && data.ok && data.stats) {
+            playStats[id] = data.stats;
+            refreshViewsLine();
+          }
+        })
+        .catch(() => {
+          /* offline / no backend — ignore */
+        });
     } catch (_) {
       /* fetch unavailable — ignore */
     }
@@ -104,7 +158,7 @@
     }
 
     titleEl.textContent = localTitle;
-    viewsEl.textContent = `${video.views} ${t("card.viewsSuffix")}`;
+    viewsEl.textContent = `${viewsLabel(video)} ${t("card.viewsSuffix")}`;
     categoryEl.textContent = i18n.localizeCategory(video.category || "");
     authorEl.textContent = localAuthor;
     descEl.textContent = localDesc;
@@ -317,6 +371,10 @@
     bindAutoPlayNext();
     bindFirstPlayReporter();
     bindHistory();
+
+    // Pull the latest play counts so the views line shows the real number
+    // even before the user does anything on this page.
+    fetchPlayStats();
 
     // Count one "open" each time the player page is loaded for a video.
     if (video) reportStat(video.id, "open");
