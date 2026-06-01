@@ -50,10 +50,18 @@
       "category.Animation": "Animasi",
       "category.Fantasy": "Fantasi",
       "category.Demo": "Demo",
+      "category.Drama": "Drama",
 
       // Card / meta
       "card.viewsSuffix": "x ditonton",
       "card.playAria": "Putar {title}",
+      "card.openAria": "Buka serial {title}",
+      "card.playEpAria": "Putar episode {ep}: {title}",
+
+      // Series / episodes
+      "series.epCount": "{n} episode",
+      "series.epBadge": "{n} EP",
+      "series.epShort": "EP{n}",
 
       // Player page
       "player.loading": "Memuat…",
@@ -64,7 +72,35 @@
       "player.like": "Suka",
       "player.share": "Bagikan",
       "player.upNext": "Selanjutnya",
+      "player.episodes": "Daftar Episode",
       "player.unsupported": "Browser Anda tidak mendukung tag video.",
+
+      // Import dialog
+      "import.button": "Impor",
+      "import.title": "Impor Serial dari Excel",
+      "import.close": "Tutup",
+      "import.desc":
+        "Unggah berkas .xlsx, .xls, atau .csv untuk menambahkan serial dan episode baru ke katalog.",
+      "import.hint.cols":
+        "Kolom yang didukung: series_id, title, description, tags, thumbnail, ep, src.",
+      "import.hint.multi":
+        "Beberapa baris dengan series_id yang sama akan digabungkan menjadi satu serial dengan banyak episode.",
+      "import.hint.format":
+        "Tag dapat dipisahkan dengan koma, titik koma, atau '、'. Hanya baris pertama tiap serial yang perlu mengisi title/description/tags/thumbnail.",
+      "import.drop": "Tarik berkas Excel ke sini, atau klik untuk memilih.",
+      "import.choose": "Pilih Berkas",
+      "import.cancel": "Batal",
+      "import.confirm": "Impor",
+      "import.preview": "Pratinjau",
+      "import.status.parsing": "Mengurai berkas…",
+      "import.status.parsed": "Ditemukan {n} serial dengan total {e} episode.",
+      "import.status.empty":
+        "Tidak ada serial yang valid ditemukan. Periksa kolom series_id dan src.",
+      "import.status.error": "Gagal mengurai berkas: {msg}",
+      "import.status.uploading": "Mengunggah ke server…",
+      "import.status.done": "Berhasil mengimpor {n} serial.",
+      "import.status.uploadFailed":
+        "Gagal mengunggah ke server. Pastikan server.py sedang berjalan.",
 
       // Toast / share
       "toast.likeAdded": "Ditambahkan ke daftar suka",
@@ -112,9 +148,16 @@
       "category.Animation": "Animation",
       "category.Fantasy": "Fantasy",
       "category.Demo": "Demo",
+      "category.Drama": "Drama",
 
       "card.viewsSuffix": "views",
       "card.playAria": "Play {title}",
+      "card.openAria": "Open series {title}",
+      "card.playEpAria": "Play episode {ep}: {title}",
+
+      "series.epCount": "{n} episodes",
+      "series.epBadge": "{n} EP",
+      "series.epShort": "EP{n}",
 
       "player.loading": "Loading…",
       "player.notFound.title": "Video not found",
@@ -124,7 +167,34 @@
       "player.like": "Like",
       "player.share": "Share",
       "player.upNext": "Up Next",
+      "player.episodes": "Episodes",
       "player.unsupported": "Your browser does not support the video tag.",
+
+      "import.button": "Import",
+      "import.title": "Import Series from Excel",
+      "import.close": "Close",
+      "import.desc":
+        "Upload an .xlsx, .xls or .csv file to add new series and episodes to the catalog.",
+      "import.hint.cols":
+        "Supported columns: series_id, title, description, tags, thumbnail, ep, src.",
+      "import.hint.multi":
+        "Multiple rows sharing the same series_id are merged into a single series with multiple episodes.",
+      "import.hint.format":
+        "Tags can be separated by comma, semicolon or '、'. Only the first row per series needs title / description / tags / thumbnail.",
+      "import.drop": "Drag your Excel file here, or click to choose.",
+      "import.choose": "Choose File",
+      "import.cancel": "Cancel",
+      "import.confirm": "Import",
+      "import.preview": "Preview",
+      "import.status.parsing": "Parsing file…",
+      "import.status.parsed": "Found {n} series with {e} episodes in total.",
+      "import.status.empty":
+        "No valid series found. Please check the series_id and src columns.",
+      "import.status.error": "Failed to parse file: {msg}",
+      "import.status.uploading": "Uploading to server…",
+      "import.status.done": "Successfully imported {n} series.",
+      "import.status.uploadFailed":
+        "Failed to upload to the server. Make sure server.py is running.",
 
       "toast.likeAdded": "Added to your likes",
       "toast.likeRemoved": "Removed from your likes",

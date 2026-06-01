@@ -44,6 +44,8 @@
           <div class="meta-stats">
             <span id="videoViews"></span>
             <span class="dot">•</span>
+            <span id="videoEpCount"></span>
+            <span class="dot">•</span>
             <span id="videoCategory"></span>
           </div>
 
@@ -70,21 +72,15 @@
           </div>
         </div>
 
-        <div class="creator-card">
-          <div class="avatar" id="creatorAvatar"></div>
-          <div class="creator-info">
-            <div class="creator-name" id="videoAuthor"></div>
-            <div class="creator-meta" data-i18n="player.creator">Kreator</div>
-          </div>
-        </div>
+        <div class="player-tags" id="videoTags"></div>
 
         <p class="description" id="videoDescription"></p>
       </div>
     </section>
 
-    <!-- Up next sidebar -->
+    <!-- Episode list sidebar -->
     <aside class="up-next">
-      <h2 class="section-title" data-i18n="player.upNext">Selanjutnya</h2>
+      <h2 class="section-title" id="upNextTitle" data-i18n="player.episodes">Daftar Episode</h2>
       <div id="upNextList" class="up-next-list">
         <!-- Filled by player.js -->
       </div>

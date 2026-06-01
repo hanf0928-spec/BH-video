@@ -1,24 +1,27 @@
 /* =========================================================
-   BH Video — Player page logic
-   - Reads ?id=<videoId> from the URL.
-   - Loads the matching video into the <video> element.
-   - Renders an "Up Next" sidebar of other videos.
+   BH Video — Player page logic (series / episodes model)
+   - URL: player.html?id=<seriesId>&ep=<n>
+   - Loads the matching series/episode into the <video> element.
+   - Sidebar shows the episode list of THE SAME series.
+   - Per-episode play counters live under composite ids
+     "<seriesId>:ep<n>" on the backend.
    - All user-facing strings go through window.I18N.
    ========================================================= */
 
 (function () {
   "use strict";
 
-  const videos = window.VIDEOS || [];
+  const Catalog = window.VideoCatalog;
 
   const videoEl = document.getElementById("videoPlayer");
   const titleEl = document.getElementById("videoTitle");
   const viewsEl = document.getElementById("videoViews");
+  const epCountEl = document.getElementById("videoEpCount");
   const categoryEl = document.getElementById("videoCategory");
-  const authorEl = document.getElementById("videoAuthor");
+  const tagsEl = document.getElementById("videoTags");
   const descEl = document.getElementById("videoDescription");
-  const avatarEl = document.getElementById("creatorAvatar");
   const upNextList = document.getElementById("upNextList");
+  const upNextTitleEl = document.getElementById("upNextTitle");
   const likeBtn = document.getElementById("likeBtn");
   const shareBtn = document.getElementById("shareBtn");
 
@@ -30,35 +33,51 @@
   };
   const t = (k, p) => i18n.t(k, p);
 
-  // Latest play counts fetched from /api/stats. Shape:
-  //   { "<videoId>": { opens, plays, ends } }
-  // Used to render the real "plays" number on the player page.
+  // Latest play counts. Shape: { "<seriesId>:ep<n>": { opens, plays, ends } }.
   let playStats = {};
+  // Track which episode key already reported a "play" event so we count at
+  // most once per navigation.
+  let playReportedFor = null;
 
   /** Format a play count (e.g. 1.2M, 12.3K, 999). */
   function formatCount(n) {
     const num = Number(n) || 0;
-    if (num >= 1_000_000) return (num / 1_000_000).toFixed(1).replace(/\.0$/, "") + "M";
+    if (num >= 1_000_000)
+      return (num / 1_000_000).toFixed(1).replace(/\.0$/, "") + "M";
     if (num >= 1_000) return (num / 1_000).toFixed(1).replace(/\.0$/, "") + "K";
     return String(num);
   }
 
-  /** Pick the label to show next to the views suffix for a given video. */
-  function viewsLabel(video) {
-    if (!video) return "";
-    const entry = playStats && playStats[video.id];
+  function parseViewsLabel(label) {
+    if (label == null) return 0;
+    const s = String(label).trim().toUpperCase();
+    const m = s.match(/^([\d.]+)\s*([KM]?)$/);
+    if (!m) return Number(s) || 0;
+    const n = parseFloat(m[1]);
+    if (!isFinite(n)) return 0;
+    if (m[2] === "M") return Math.round(n * 1_000_000);
+    if (m[2] === "K") return Math.round(n * 1_000);
+    return Math.round(n);
+  }
+
+  /** Pick the label to show next to the views suffix for an episode. */
+  function episodeViewsLabel(seriesId, ep) {
+    if (!ep) return "";
+    const key = Catalog.episodeKey(seriesId, ep.ep);
+    const entry = playStats && playStats[key];
     if (entry && typeof entry.plays === "number" && entry.plays > 0) {
       return formatCount(entry.plays);
     }
-    return video.views;
+    return ep.views || "0";
   }
 
-  /** Refresh the views line of the currently displayed video. */
+  /** Refresh the views line of the currently displayed episode. */
   function refreshViewsLine() {
-    const id = (videoEl && videoEl.dataset.currentId) || getRequestedId();
-    const v = pickVideo(id);
-    if (!v || !viewsEl) return;
-    viewsEl.textContent = `${viewsLabel(v)} ${t("card.viewsSuffix")}`;
+    const { series, episode } = currentTarget();
+    if (!series || !episode || !viewsEl) return;
+    viewsEl.textContent = `${episodeViewsLabel(series.id, episode)} ${t(
+      "card.viewsSuffix"
+    )}`;
   }
 
   /** Pull the latest stats from the backend, then update the views line. */
@@ -68,6 +87,9 @@
       .then((data) => {
         playStats = data && typeof data === "object" ? data : {};
         refreshViewsLine();
+        // Re-render sidebar so per-episode counts also update.
+        const { series, episode } = currentTarget();
+        if (series && episode) renderEpisodeList(series, episode.ep);
       })
       .catch(() => {
         /* offline / no backend — keep static fallback */
@@ -75,14 +97,29 @@
   }
 
   /**
-   * Fire-and-forget play-count reporter.
-   * Sends { id, event } to /api/stats on the static server (server.py).
-   * On success, applies the returned counters locally and refreshes the
-   * views line so the page reflects the new value immediately.
-   * Failures are silenced so a missing backend never breaks playback.
+   * Try to load the merged library (built-in + user-imported) so the
+   * player works for series that were uploaded via the import dialog.
    */
-  function reportStat(id, event) {
-    if (!id || !event) return;
+  function fetchLibrary() {
+    return fetch("/api/library", { headers: { Accept: "application/json" } })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data && Array.isArray(data.imported)) {
+          Catalog.mergeImported(data.imported);
+        }
+      })
+      .catch(() => {
+        /* offline / no backend — keep built-ins */
+      });
+  }
+
+  /**
+   * Fire-and-forget play-count reporter. The backend stores counts under
+   * the composite "<seriesId>:ep<n>" key.
+   */
+  function reportStat(seriesId, ep, event) {
+    if (!seriesId || !ep || !event) return;
+    const id = Catalog.episodeKey(seriesId, ep);
     try {
       fetch("/api/stats", {
         method: "POST",
@@ -95,58 +132,79 @@
           if (data && data.ok && data.stats) {
             playStats[id] = data.stats;
             refreshViewsLine();
+            // Update the corresponding row in the episode list as well.
+            const row = upNextList.querySelector(
+              `.up-next-item[data-ep="${ep}"] .un-meta`
+            );
+            const { series } = currentTarget();
+            if (row && series) {
+              row.textContent = `${t("series.epShort", {
+                n: ep,
+              })} • ${episodeViewsLabel(series.id, { ep, views: "" })} ${t(
+                "card.viewsSuffix"
+              )}`;
+            }
           }
         })
-        .catch(() => {
-          /* offline / no backend — ignore */
-        });
+        .catch(() => {});
     } catch (_) {
       /* fetch unavailable — ignore */
     }
   }
 
-  // Track which video already reported the 'play' event so we count at most
-  // once per navigation (a single video may pause/resume many times).
-  let playReportedFor = null;
+  /* ---------- URL & current target helpers ---------- */
 
-  /** Read the requested video id from the URL query string. */
   function getRequestedId() {
     const params = new URLSearchParams(window.location.search);
     return params.get("id");
   }
-
-  /** Locate a video by id, falling back to the first one if missing. */
-  function pickVideo(id) {
-    return videos.find((v) => v.id === id) || videos[0];
+  function getRequestedEp() {
+    const params = new URLSearchParams(window.location.search);
+    const n = Number(params.get("ep"));
+    return n > 0 ? n : 1;
   }
 
+  /** Resolve the series + episode currently targeted by the URL/state. */
+  function currentTarget() {
+    const seriesId = (videoEl && videoEl.dataset.seriesId) || getRequestedId();
+    const epNum = Number(videoEl && videoEl.dataset.epNum) || getRequestedEp();
+    const series = Catalog.findSeries(seriesId) || (window.VIDEOS || [])[0];
+    const episode = Catalog.findEpisode(series, epNum);
+    return { series, episode };
+  }
+
+  /* ---------- Render ---------- */
+
   /** Render the main video and its metadata. */
-  function loadVideo(video) {
-    if (!video) {
+  function loadEpisode(series, episode) {
+    if (!series || !episode) {
       titleEl.textContent = t("player.notFound.title");
       descEl.textContent = t("player.notFound.desc");
       viewsEl.textContent = "";
       categoryEl.textContent = "";
-      authorEl.textContent = "";
+      if (epCountEl) epCountEl.textContent = "";
+      if (tagsEl) tagsEl.innerHTML = "";
       return;
     }
 
-    const localTitle = i18n.pickLocalized(video, "title");
-    const localDesc = i18n.pickLocalized(video, "description");
-    const localAuthor = i18n.pickLocalized(video, "author") || video.author;
+    const localSeriesTitle = i18n.pickLocalized(series, "title");
+    const localDesc = i18n.pickLocalized(series, "description");
+    const epLabel = t("series.epShort", { n: episode.ep });
+    const composedTitle = `${localSeriesTitle} — ${epLabel} ${episode.title || ""}`.trim();
 
-    document.title = `${localTitle} — BH Video`;
+    document.title = `${composedTitle} — BH Video`;
 
-    // Reset any previous error overlay.
     hidePlaybackError();
 
-    // Only reset src/poster when actually switching videos to avoid
-    // restarting playback on a simple language change.
-    if (videoEl.dataset.currentId !== video.id) {
-      videoEl.src = video.src;
-      videoEl.poster = video.thumbnail;
-      videoEl.dataset.currentId = video.id;
-      // New video → reset the per-navigation "play already reported" guard.
+    const sameEpisode =
+      videoEl.dataset.seriesId === series.id &&
+      Number(videoEl.dataset.epNum) === Number(episode.ep);
+
+    if (!sameEpisode) {
+      videoEl.src = episode.src;
+      videoEl.poster = episode.thumbnail || series.thumbnail;
+      videoEl.dataset.seriesId = series.id;
+      videoEl.dataset.epNum = String(episode.ep);
       playReportedFor = null;
       videoEl.load();
       const playPromise = videoEl.play();
@@ -157,38 +215,64 @@
       }
     }
 
-    titleEl.textContent = localTitle;
-    viewsEl.textContent = `${viewsLabel(video)} ${t("card.viewsSuffix")}`;
-    categoryEl.textContent = i18n.localizeCategory(video.category || "");
-    authorEl.textContent = localAuthor;
+    titleEl.textContent = composedTitle;
+    viewsEl.textContent = `${episodeViewsLabel(series.id, episode)} ${t(
+      "card.viewsSuffix"
+    )}`;
+    if (epCountEl) {
+      const total = Array.isArray(series.episodes) ? series.episodes.length : 0;
+      epCountEl.textContent = t("series.epCount", { n: total });
+    }
+    categoryEl.textContent = i18n.localizeCategory(series.category || "");
     descEl.textContent = localDesc;
 
-    avatarEl.textContent = (localAuthor || "?")
-      .split(" ")
-      .map((s) => s[0])
-      .filter(Boolean)
-      .slice(0, 2)
-      .join("")
-      .toUpperCase();
+    // Render the series-level tag chips (full list, no slicing — the
+    // player page has more horizontal room than a card).
+    if (tagsEl) {
+      const tags = Array.isArray(series.tags) ? series.tags : [];
+      tagsEl.innerHTML = tags
+        .map(
+          (tag) => `<span class="tag-chip">${escapeHtml(tag)}</span>`
+        )
+        .join("");
+    }
   }
 
-  /** Render the Up Next sidebar with all OTHER videos. */
-  function renderUpNext(currentId) {
-    const others = videos.filter((v) => v.id !== currentId);
-    upNextList.innerHTML = others
-      .map((v) => {
-        const title = i18n.pickLocalized(v, "title");
-        const author = i18n.pickLocalized(v, "author") || v.author;
+  /** Render the sidebar with all episodes of THIS series. */
+  function renderEpisodeList(series, currentEp) {
+    if (upNextTitleEl) {
+      upNextTitleEl.textContent = t("player.episodes");
+    }
+    if (!series || !Array.isArray(series.episodes)) {
+      upNextList.innerHTML = "";
+      return;
+    }
+    upNextList.innerHTML = series.episodes
+      .map((e) => {
+        const isActive = Number(e.ep) === Number(currentEp);
+        const views = episodeViewsLabel(series.id, e);
+        const epShort = t("series.epShort", { n: e.ep });
+        const thumb = e.thumbnail || series.thumbnail || "";
+        const displayTitle = e.title || epShort;
         return `
-        <div class="up-next-item" data-id="${escapeAttr(v.id)}" role="button" tabindex="0"
-             aria-label="${escapeAttr(t("card.playAria", { title }))}">
+        <div class="up-next-item ${isActive ? "active" : ""}"
+             data-ep="${escapeAttr(String(e.ep))}"
+             role="button" tabindex="0"
+             aria-label="${escapeAttr(
+               t("card.playEpAria", { ep: e.ep, title: displayTitle })
+             )}">
           <div class="thumb">
-            <img src="${escapeAttr(v.thumbnail)}" alt="${escapeAttr(title)}" loading="lazy" />
-            <span class="duration">${escapeHtml(v.duration)}</span>
+            <img src="${escapeAttr(thumb)}" alt="${escapeAttr(
+          displayTitle
+        )}" loading="lazy" />
+            <span class="duration">${escapeHtml(e.duration || "")}</span>
+            <span class="ep-badge">${escapeHtml(epShort)}</span>
           </div>
           <div>
-            <h3 class="un-title">${escapeHtml(title)}</h3>
-            <div class="un-meta">${escapeHtml(author)} • ${escapeHtml(v.views)} ${escapeHtml(t("card.viewsSuffix"))}</div>
+            <h3 class="un-title">${escapeHtml(displayTitle)}</h3>
+            <div class="un-meta">${escapeHtml(epShort)} • ${escapeHtml(
+          views
+        )} ${escapeHtml(t("card.viewsSuffix"))}</div>
           </div>
         </div>
       `;
@@ -196,11 +280,11 @@
       .join("");
   }
 
-  function bindUpNextEvents() {
+  function bindEpisodeEvents() {
     upNextList.addEventListener("click", (e) => {
       const item = e.target.closest(".up-next-item");
       if (!item) return;
-      navigateTo(item.dataset.id);
+      navigateToEp(Number(item.dataset.ep));
     });
 
     upNextList.addEventListener("keydown", (e) => {
@@ -208,21 +292,25 @@
       const item = e.target.closest(".up-next-item");
       if (!item) return;
       e.preventDefault();
-      navigateTo(item.dataset.id);
+      navigateToEp(Number(item.dataset.ep));
     });
   }
 
-  /** Switch to another video in the same player tab. */
-  function navigateTo(id) {
-    const video = pickVideo(id);
-    if (!video) return;
-    // Update the URL so the page can be refreshed/shared.
-    const newUrl = `player.html?id=${encodeURIComponent(id)}`;
-    window.history.pushState({ id }, "", newUrl);
-    loadVideo(video);
-    renderUpNext(id);
-    // Count one "open" per navigation to a different video.
-    reportStat(video.id, "open");
+  /** Switch to another episode in the SAME series within this tab. */
+  function navigateToEp(epNum) {
+    const seriesId = videoEl.dataset.seriesId || getRequestedId();
+    const series = Catalog.findSeries(seriesId);
+    const episode = Catalog.findEpisode(series, epNum);
+    if (!series || !episode) return;
+
+    const newUrl = `player.html?id=${encodeURIComponent(
+      series.id
+    )}&ep=${encodeURIComponent(episode.ep)}`;
+    window.history.pushState({ id: series.id, ep: episode.ep }, "", newUrl);
+
+    loadEpisode(series, episode);
+    renderEpisodeList(series, episode.ep);
+    reportStat(series.id, episode.ep, "open");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -254,41 +342,42 @@
     });
   }
 
-  /** Auto-play the next video when the current one ends. */
+  /** Auto-play the next episode of the same series when the current ends. */
   function bindAutoPlayNext() {
     videoEl.addEventListener("ended", () => {
-      const currentId = getRequestedId();
-      // Count one "completed" view per finish event.
-      reportStat(currentId, "ended");
-      const idx = videos.findIndex((v) => v.id === currentId);
+      const { series, episode } = currentTarget();
+      if (!series || !episode) return;
+      reportStat(series.id, episode.ep, "ended");
+      const idx = series.episodes.findIndex((e) => e.ep === episode.ep);
       if (idx === -1) return;
-      const next = videos[(idx + 1) % videos.length];
-      if (next) navigateTo(next.id);
+      const next = series.episodes[idx + 1];
+      if (next) navigateToEp(next.ep);
     });
   }
 
-  /** Report the first real "play" for whichever video is currently loaded. */
+  /** Report the first real "play" for whichever episode is currently loaded. */
   function bindFirstPlayReporter() {
     videoEl.addEventListener("play", () => {
-      const id = videoEl.dataset.currentId || getRequestedId();
-      if (!id) return;
-      if (playReportedFor === id) return; // already counted for this load
-      playReportedFor = id;
-      reportStat(id, "play");
+      const seriesId = videoEl.dataset.seriesId || getRequestedId();
+      const ep = Number(videoEl.dataset.epNum) || getRequestedEp();
+      if (!seriesId || !ep) return;
+      const key = Catalog.episodeKey(seriesId, ep);
+      if (playReportedFor === key) return;
+      playReportedFor = key;
+      reportStat(seriesId, ep, "play");
     });
   }
 
-  /** Handle the browser back/forward buttons. */
+  /** Handle browser back/forward buttons. */
   function bindHistory() {
     window.addEventListener("popstate", () => {
-      const id = getRequestedId();
-      const video = pickVideo(id);
-      loadVideo(video);
-      renderUpNext(video ? video.id : null);
+      const { series, episode } = currentTarget();
+      loadEpisode(series, episode);
+      if (series && episode) renderEpisodeList(series, episode.ep);
     });
   }
 
-  /** Tiny toast notification. */
+  /* ---------- Toast & error overlay ---------- */
   let toastEl;
   let toastTimer;
   function showToast(msg) {
@@ -303,7 +392,6 @@
     toastTimer = setTimeout(() => toastEl.classList.remove("show"), 2200);
   }
 
-  /** Show / hide a friendly error overlay on top of the player. */
   let errorOverlay;
   function showPlaybackError(message) {
     const shell = videoEl.parentElement;
@@ -320,7 +408,9 @@
     errorOverlay.innerHTML = `
       <div>
         <div style="font-size:32px;margin-bottom:8px;">⚠️</div>
-        <div style="font-weight:600;margin-bottom:4px;">${escapeHtml(t("error.title"))}</div>
+        <div style="font-weight:600;margin-bottom:4px;">${escapeHtml(
+          t("error.title")
+        )}</div>
         <div style="color:#bbb;max-width:480px;">${escapeHtml(message)}</div>
       </div>`;
     errorOverlay.style.display = "grid";
@@ -333,14 +423,10 @@
     videoEl.addEventListener("error", () => {
       const err = videoEl.error;
       const msg =
-        (err && t("error.code." + err.code)) ||
-        t("error.generic");
+        (err && t("error.code." + err.code)) || t("error.generic");
       showPlaybackError(msg);
     });
-
-    // Also catch the rare case where `<source>` children all fail.
     videoEl.addEventListener("stalled", () => {
-      // Just a hint in the console — do not show overlay for transient stalls.
       // eslint-disable-next-line no-console
       console.warn("[player] network stalled while loading", videoEl.currentSrc);
     });
@@ -360,32 +446,37 @@
   }
 
   /* ---------- Init ---------- */
-  document.addEventListener("DOMContentLoaded", () => {
-    const id = getRequestedId();
-    const video = pickVideo(id);
+  function boot() {
+    const seriesId = getRequestedId();
+    const epNum = getRequestedEp();
+    const series = Catalog.findSeries(seriesId) || (window.VIDEOS || [])[0];
+    const episode = Catalog.findEpisode(series, epNum);
+
     bindPlaybackErrors();
-    loadVideo(video);
-    renderUpNext(video ? video.id : null);
-    bindUpNextEvents();
+    loadEpisode(series, episode);
+    if (series && episode) renderEpisodeList(series, episode.ep);
+    bindEpisodeEvents();
     bindActions();
     bindAutoPlayNext();
     bindFirstPlayReporter();
     bindHistory();
 
-    // Pull the latest play counts so the views line shows the real number
-    // even before the user does anything on this page.
     fetchPlayStats();
 
-    // Count one "open" each time the player page is loaded for a video.
-    if (video) reportStat(video.id, "open");
+    if (series && episode) reportStat(series.id, episode.ep, "open");
 
     if (window.I18N && typeof window.I18N.onChange === "function") {
       window.I18N.onChange(() => {
-        const curId = getRequestedId();
-        const v = pickVideo(curId);
-        loadVideo(v);
-        renderUpNext(v ? v.id : null);
+        const { series: s2, episode: e2 } = currentTarget();
+        loadEpisode(s2, e2);
+        if (s2 && e2) renderEpisodeList(s2, e2.ep);
       });
     }
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    // Try to load the imported library first so links like
+    // player.html?id=imported-series&ep=1 also work after a hard refresh.
+    fetchLibrary().then(boot);
   });
 })();

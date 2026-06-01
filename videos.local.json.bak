@@ -1,0 +1,90 @@
+{
+  "imported": [
+    {
+      "author": "QA Bot",
+      "category": "Drama",
+      "description": "Hello from PowerShell",
+      "episodes": [
+        {
+          "duration": "0:52",
+          "ep": 1,
+          "src": "https://media.w3.org/2010/05/sintel/trailer.mp4",
+          "thumbnail": "",
+          "title": "Pilot",
+          "views": ""
+        },
+        {
+          "duration": "0:10",
+          "ep": 2,
+          "src": "https://www.w3schools.com/html/mov_bbb.mp4",
+          "thumbnail": "",
+          "title": "Confession",
+          "views": ""
+        }
+      ],
+      "id": "drama-test",
+      "thumbnail": "https://media.w3.org/2010/05/sintel/poster.png",
+      "title": "Imported Test Drama"
+    },
+    {
+      "author": "",
+      "category": "都市",
+      "description": "一段都市甜虐爱情故事，霸道总裁与平凡女孩的双向奔赴。",
+      "episodes": [
+        {
+          "duration": "",
+          "ep": 1,
+          "src": "https://media.w3.org/2010/05/bunny/trailer.mp4",
+          "thumbnail": "https://media.w3.org/2010/05/bunny/poster.png",
+          "title": "第1集",
+          "views": ""
+        },
+        {
+          "duration": "",
+          "ep": 2,
+          "src": "https://media.w3.org/2010/05/bunny/movie.mp4",
+          "thumbnail": "https://media.w3.org/2010/05/bunny/poster.png",
+          "title": "第2集",
+          "views": ""
+        },
+        {
+          "duration": "",
+          "ep": 3,
+          "src": "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4",
+          "thumbnail": "https://media.w3.org/2010/05/bunny/poster.png",
+          "title": "第3集",
+          "views": ""
+        }
+      ],
+      "id": "drama01",
+      "thumbnail": "https://media.w3.org/2010/05/bunny/poster.png",
+      "title": "霸总的逆袭"
+    },
+    {
+      "author": "",
+      "category": "悬疑",
+      "description": "一通深夜来电揭开尘封多年的秘密，悬疑短剧。",
+      "episodes": [
+        {
+          "duration": "",
+          "ep": 1,
+          "src": "https://media.w3.org/2010/05/sintel/trailer.mp4",
+          "thumbnail": "https://media.w3.org/2010/05/sintel/poster.png",
+          "title": "第1集",
+          "views": ""
+        },
+        {
+          "duration": "",
+          "ep": 2,
+          "src": "https://download.blender.org/durian/trailer/sintel_trailer-480p.mp4",
+          "thumbnail": "https://media.w3.org/2010/05/sintel/poster.png",
+          "title": "第2集",
+          "views": ""
+        }
+      ],
+      "id": "drama02",
+      "thumbnail": "https://media.w3.org/2010/05/sintel/poster.png",
+      "title": "午夜誓言"
+    }
+  ]
+}
